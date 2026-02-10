@@ -33,9 +33,9 @@ function setup() {
   button.mousePressed(toggleState); // Attach callback function
 
 
-  cam = createCapture(VIDEO);
-  cam.size(600, 600);
-  cam.hide(); // Hide the default HTML video element
+  // cam = createCapture(VIDEO);
+  // cam.size(600, 600);
+  // cam.hide(); // Hide the default HTML video element
 
   noStroke();
 }
@@ -48,7 +48,7 @@ function draw() {
   exampleShader.setUniform("u_time", millis());
   exampleShader.setUniform("u_mouse", [mouseX / width, mouseY / height]);
   exampleShader.setUniform("u_scale", slider.value());
-  exampleShader.setUniform('cam', cam);
+  // exampleShader.setUniform('cam', cam);
   exampleShader.setUniform('toggle', toggle);
 
 
