@@ -260,9 +260,7 @@ vec3 pointcloud(vec2 st, float scale, vec3 img){
 void main(){
 
     /* PARAMETERS */
-    vec2 offset = vec2(.2,0.2);
-
-
+    // vec2 offset = vec2(.2,0.2);
     vec2 st = pos;
 
     st.y = 1.0 - pos.y;
@@ -271,23 +269,23 @@ void main(){
 
 
     vec2 ipos = floor(st);  // get the integer coords
-    vec2 fpos = fract(st);  // get the fractional coords
+    // vec2 fpos = fract(st);  // get the fractional coords
 
 
 
     // Import image and normalize colors
-    vec4 img = texture(cam, ipos/scale);
+    vec4 img = texture(background, ipos/scale);
     vec3 norm_img = unmultiply(img);
 
 
     vec3 color = vec3(0.0);
 
-if (!toggle) {
-    color = halftoning(st, scale, norm_img);
-} if (toggle) {
-    color = pointcloud(st, scale, norm_img);
-}
+    if (!toggle) {
+        color = halftoning(st, scale, norm_img);
+    } if (toggle) {
+        color = pointcloud(st, scale, norm_img);
+    }
     fragColor = premultiply(color, img.a);
-    //fragColor = img;
+    // fragColor = img;
 }
 
