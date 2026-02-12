@@ -5,16 +5,29 @@ out vec4 fragColor;
 uniform float u_time;
 uniform vec2 u_resolution;
 uniform vec2 u_mouse;
-// uniform sampler2D cam;
+uniform sampler2D cam;
 // uniform sampler2D video;
-uniform int u_grid_bg;
+
+// FG params
 uniform int u_grid_fg;
-uniform bool u_color_bg;
 uniform bool u_color_fg;
+uniform vec3 u_color_accent_fg;
+uniform bool u_show_fg;
+uniform float u_mask_fg;
+
+// BG params
+uniform int u_grid_bg;
+uniform float u_bright_bg;
+uniform float u_bright_bg_2;
+uniform bool u_color_bg;
+uniform vec3 u_color_accent_bg;
+uniform float u_bright_bg_final;
+//uniform float u_merge_bg;
 
 #define PI 3.14159265359
 
 uniform sampler2D u_bg;
+uniform sampler2D u_bg_2;
 uniform sampler2D u_img;
 
 
@@ -185,6 +198,10 @@ float diamond (vec2 st, vec2 center, float size){
 
 
 /* UTILS */
+float mean(vec3 _color) {
+    return (_color.r + _color.g + _color.b)/3.;
+}
+
 vec3 unmultiply(vec4 texel) {
     return texel.a > 0.0 ? texel.rgb / texel.a : vec3(0.0);
 }
@@ -279,7 +296,6 @@ vec3 pointcloud(vec2 _st, vec3 _img, int _fc){
     /* SELECT FUNCTION TO APPLY */
     if (_fc == 1){
         circle_res = 1.-square(fpos, vec2(0.5), radius);
-
     } else if (_fc == 2) {
         circle_res = 1.-blotches(fpos, vec2(0.5), radius);
     } else if (_fc == 3) {
@@ -287,16 +303,37 @@ vec3 pointcloud(vec2 _st, vec3 _img, int _fc){
     } else {
         circle_res = 1.-diamond(fpos, vec2(0.5), radius);
     }
-    //vec4 color_circle = vec4(circle, circle, circle, img.a);
     color = vec3(1.0-circle_res);
     return color;
 }
 
 vec4 border(vec2 _st, float _size){
+    
     vec4 color = vec4(0.0);
-    vec2 bl = step(vec2(_size),_st);       // bottom-left
-    vec2 tr = step(vec2(_size),1.0-_st);   // top-right
-    color = vec4(bl.x * bl.y * tr.x * tr.y);
+    vec3 color_bl = vec3(0.0);
+    vec3 color_tr = vec3(0.0);
+    vec2 bl = step(vec2(_size),_st); 
+    vec2 tr = step(vec2(_size),1.0-_st); 
+    float border_alpha = bl.x * bl.y * tr.x * tr.y;
+
+    vec2 blbl = step(vec2(_size/2.),_st);  
+    vec2 trbl = step(vec2(_size/2.),1.0-_st); 
+
+    float diag = abs(float((1.-_st.x) > _st.y)); 
+    color_bl = vec3(blbl.x * blbl.y * diag);
+    //color_bl *= diag;
+
+    diag = 1. - diag; 
+    color_tr = vec3(trbl.x * trbl.y * diag);
+    //color_tr *= diag;
+    
+    //vec2 color_in_vec = vec2(1.0) - step(vec2(_size),_st);
+    //color_in = vec4(color_in_vec.x * color_in_vec.y);
+    //color_bl.rgb *= vec3(0.5);
+    //color = color_bl;
+    //color = vec4(diag);
+    color = vec4(color_bl*color_tr, border_alpha);
+    color = vec4(color_bl, 0.0);
     return color;
 }
 
@@ -320,54 +357,72 @@ void main(){
     st_bg *= grid; // Scale the coordinate system by 10
     vec2 ipos = floor(st_bg);  // get the integer coords
 
+    vec4 bright_bg = vec4(vec3(u_bright_bg),1.0);
+    vec4 bright_bg_2 = vec4(vec3(u_bright_bg_2),1.0);
+
     // Import images and normalize colors
-    vec4 img = texture(u_bg, ipos/grid);
-    vec3 norm_img = unmultiply(img);
+    vec4 img_bg = texture(u_bg, ipos/grid) * bright_bg;
+    vec3 norm_img_bg = unmultiply(img_bg);
+
+    vec4 img_bg_2 = texture(u_bg_2, ipos/grid) * bright_bg_2;
+    vec3 norm_img_bg_2 = unmultiply(img_bg_2);
 
 
     vec3 color_bg = vec3(0.0);
+    vec3 color_bg_2 = vec3(0.0);
     if (u_color_bg) {
-        color_bg = halftoning(st_bg, grid, norm_img);
+        color_bg = halftoning(st_bg, grid, norm_img_bg);
+        color_bg_2 = halftoning(st_bg, grid, norm_img_bg_2);
     } if (!u_color_bg) {
-        color_bg = pointcloud(st_bg, norm_img, 4);
+        color_bg = pointcloud(st_bg, norm_img_bg, 2);
+        color_bg_2 = pointcloud(st_bg, norm_img_bg_2, 2);
     }
+
+    color_bg = max(color_bg, color_bg_2);
+    color_bg = mix(color_bg_2,color_bg,step(min(mean(color_bg), mean(color_bg_2)),0.5))* u_bright_bg_final;
+    //color_bg = max((color_bg.r + color_bg.g + color_bg.b)/3.0, norm_img_bg_2);
+    
+    
+    float whiteness = smoothstep(0.5, 1.0, (color_bg.r + color_bg.g + color_bg.b) / 3.0);
+    // Only applies bg color to white pixels
+    color_bg = mix(color_bg, color_bg * u_color_accent_bg, whiteness);
 
 
 
     // Create foreground
-    vec2 st_fg = pos;
-    st_fg.y = 1.0 - pos.y;
-    float grid2 = float(u_grid_fg);
-    st_fg *= grid2; // Scale the coordinate system by 10
-    vec2 ipos2 = floor(st_fg);  // get the integer coords
+    if (u_show_fg){
+        vec2 st_fg = pos;
+        st_fg.y = 1.0 - pos.y;
+        float grid2 = float(u_grid_fg);
+        st_fg *= grid2; // Scale the coordinate system by 10
+        vec2 ipos2 = floor(st_fg);  // get the integer coords
 
-    vec4 img2 = texture(u_img, ipos2/grid2);
-    vec3 norm_img2 = unmultiply(img2);
+        vec4 img_fg = texture(u_img, ipos2/grid2);
+        vec3 norm_img_fg = unmultiply(img_fg);
 
-    vec3 color_fg = vec3(0.0);
-    if (u_color_fg) {
-        color_fg = halftoning(st_fg, grid2, norm_img2);
-    } if (!u_color_fg) {
-        color_fg = pointcloud(st_fg, norm_img2, 2);
-    }
+        float mask1 = mask(st_fg,norm_img_fg,u_mask_fg);
 
-    float mask1 = mask(st_fg,norm_img2,0.5);
-    float mask2 = 1.0;//mask(st_fg,color_fg,0.5);
+        vec3 color_fg = vec3(0.0);
+        if (u_color_fg) {
+            color_fg = halftoning(st_fg, grid2, norm_img_fg);
+        } if (!u_color_fg) {
+            color_fg = pointcloud(st_fg, norm_img_fg, 2);
+            whiteness = smoothstep(0.5, 1.0, (color_fg.r + color_fg.g + color_fg.b) / 3.0);
+            // Only applies bg color to white pixels
+            color_fg = mix(color_fg, color_fg * u_color_accent_fg, whiteness);
+        }
 
+        float mask2 = 1.0;//mask(st_fg,color_fg,0.5);
+
+        // Compose image
+        color_bg = mergeImg(color_bg, color_fg, mask1*mask2);
+    } 
 
     // Create border
+    // top-right
+    // vec4 border = border(st, 0.05);
+    // color_bg = mix(color_bg,border.rgb,1.-border.a);
 
-    // vec2 bl = step(vec2(0.05),st);       // bottom-left
-    // vec2 tr = step(vec2(0.05),1.0-st);   // top-right
-    //vec3 border = vec3(bl.x * bl.y * tr.x * tr.y);
-    
-
-
-    // Compose image
-    color_bg = mergeImg(color_bg, color_fg, mask1*mask2);
-    //color = color2;
-    //color = mix(color,border,1.-border.r);
-    fragColor = premultiply(color_bg, img.a);
-    // fragColor = img;
+    fragColor = premultiply(color_bg, img_bg.a);
 }
 
