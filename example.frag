@@ -2,7 +2,6 @@
 precision mediump float;
 in vec2 pos;
 out vec4 fragColor;
-uniform float u_time;
 uniform vec2 u_resolution;
 uniform vec2 u_mouse;
 uniform sampler2D cam;

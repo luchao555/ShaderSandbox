@@ -62,8 +62,11 @@ function preload() {
 
 
 function setup() {
-  createCanvas(min(windowWidth, windowHeight), min(windowWidth, windowHeight), WEBGL);
-
+  try {
+    createCanvas(min(windowWidth, windowHeight), min(windowWidth, windowHeight), WEBGL);
+  } catch (e) {
+    document.title = "ERR: " + e.message;
+  }
   // cam = createCapture(VIDEO);
   // cam.size(600, 600);
   // cam.hide(); // Hide the default HTML video element

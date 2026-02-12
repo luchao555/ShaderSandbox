@@ -1,7 +1,7 @@
 #version 300 es
+precision mediump float;
 in vec3 aPosition;
 in vec2 aTexCoord;
-uniform float u_time;
 out vec2 pos;
 
 void main(){
