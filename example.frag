@@ -5,13 +5,17 @@ out vec4 fragColor;
 uniform float u_time;
 uniform vec2 u_resolution;
 uniform vec2 u_mouse;
-//uniform sampler2D cam;
-uniform int u_scale;
-uniform bool toggle;
+// uniform sampler2D cam;
+// uniform sampler2D video;
+uniform int u_grid;
+uniform int u_grid2;
+uniform bool u_toggle;
+uniform bool u_toggle2;
 
 #define PI 3.14159265359
 
-uniform sampler2D background;
+uniform sampler2D u_bg;
+uniform sampler2D u_img;
 
 
 /* RGB TO CMYK */
@@ -205,22 +209,34 @@ vec2 rotategridf(vec2 st, float angle, float scale){
     return fract(st_angle);
 }
 
-vec3 halftoning(vec2 st, float scale, vec3 img){
+mat2 scale(vec2 _scale){
+    return mat2(_scale.x,0.0,
+                0.0,_scale.y);
+}
+
+vec3 placeElement (vec2 _st, vec2 _pos, float _grid, vec2 _scale, float _rot, vec3 _img){
+    _st -= vec2(0.5*_grid);
+    _st = scale( _scale) * _st;
+    _st += vec2(0.5*_grid);
+    return vec3(0.0);
+}
+
+vec3 halftoning(vec2 _st, float _grid, vec3 _img){
 
     /* ANGLE CALCULATIONS */
-    vec2 fpos_k = rotategridf(st, 0.78, scale);  // get the fpos for black
-    vec2 fpos_c = rotategridf(st, 0.26, scale);  // get the fpos for cyan
-    vec2 fpos_m = rotategridf(st, 1.3, scale);   // get the fpos for magenta
-    vec2 fpos_y = rotategridf(st, 0., scale);  // get the fpos for yellow
+    vec2 fpos_k = rotategridf(_st, 0.78, _grid);  // get the fpos for black
+    vec2 fpos_c = rotategridf(_st, 0.26, _grid);  // get the fpos for cyan
+    vec2 fpos_m = rotategridf(_st, 1.3, _grid);   // get the fpos for magenta
+    vec2 fpos_y = rotategridf(_st, 0., _grid);  // get the fpos for yellow
 
 
     vec3 color = vec3(0.0);
     vec3 color_circle = vec3(0.0);
 
     // Create negative image
-    img.rgb = vec3(1.0)-img.rgb;
+    _img.rgb = vec3(1.0)-_img.rgb;
     // Get black and white of the image
-    float mean = (img.r+img.g+img.b)/3.0;
+    float mean = (_img.r+_img.g+_img.b)/3.0;
     float slope = 1.0 - pow(abs (sin(PI * (mean+1.0) / 2.0)), 3.0);
     slope = 1.0 - pow(abs (mean-1.), 5.5);
     float radius = (mean/1.5)*slope;
@@ -228,63 +244,124 @@ vec3 halftoning(vec2 st, float scale, vec3 img){
     //vec4 color_circle = vec4(circle, circle, circle, img.a);
     color = vec3(1.0-circle_res);
 
-    color_circle.r = blotches(fpos_y , vec2(0.5), img.r/1.5);
-    color_circle.g = blotches(fpos_c, vec2(0.5), img.g/1.5);
-    color_circle.b = blotches(fpos_m , vec2(0.5), img.b/1.5);
+    color_circle.r = blotches(fpos_y , vec2(0.5), _img.r/1.5);
+    color_circle.g = blotches(fpos_c, vec2(0.5), _img.g/1.5);
+    color_circle.b = blotches(fpos_m , vec2(0.5), _img.b/1.5);
 
 
     color *= color_circle;
     return color;
 }
 
+vec3 mergeImg(vec2 _st, vec3 _bg, vec3 _img, float _mask){
+    vec3 result = _bg;
+    if (_mask == 1.0) {
+        result = _img;
+    }
+    return result;
+}
 
-vec3 pointcloud(vec2 st, float scale, vec3 img){
+
+vec3 pointcloud(vec2 _st, vec3 _img, int _fc){
 
     vec3 color = vec3(0.0);
 
-    vec2 fpos = fract(st);  // get the fractional coords
+    vec2 fpos = fract(_st);  // get the fractional coords
 
     // Create negative image
-    img.rgb = vec3(1.0)-img.rgb;
+    _img.rgb = vec3(1.0)-_img.rgb;
     // Get black and white of the image
-    float mean = (img.r+img.g+img.b)/3.0;
+    float mean = (_img.r+_img.g+_img.b)/3.0;
     float slope = 1.0 - pow(abs (sin(PI * (mean+1.0) / 2.0)), 3.0);
     slope = 1.0 - pow(abs (mean-1.), 5.5);
     float radius = (mean/1.5)*slope;
-    float circle_res = 1.-blotches(fpos, vec2(0.5), radius);
+    float circle_res = 0.0;
+    /* SELECT FUNCTION TO APPLY */
+    if (_fc == 1){
+        circle_res = 1.-square(fpos, vec2(0.5), radius);
+
+    } else if (_fc == 2) {
+        circle_res = 1.-blotches(fpos, vec2(0.5), radius);
+    } else if (_fc == 3) {
+        circle_res = 1.-circle(fpos, vec2(0.5), radius);
+    } else {
+        circle_res = 1.-diamond(fpos, vec2(0.5), radius);
+    }
     //vec4 color_circle = vec4(circle, circle, circle, img.a);
     color = vec3(1.0-circle_res);
     return color;
 }
+
+vec4 border(vec2 _st, float _size){
+    vec4 color = vec4(0.0);
+    vec2 bl = step(vec2(_size),_st);       // bottom-left
+    vec2 tr = step(vec2(_size),1.0-_st);   // top-right
+    color = vec4(bl.x * bl.y * tr.x * tr.y);
+    return color;
+}
+
+float mask(vec2 _st, vec3 _img, float _thresh){
+    float mean = (_img.r+_img.g+_img.b)/3.0;
+    return step(mean, _thresh);
+}
+
+
 
 void main(){
 
     /* PARAMETERS */
     // vec2 offset = vec2(.2,0.2);
     vec2 st = pos;
+    vec2 st2 = pos;
+
+
+    vec2 bl = step(vec2(0.05),st);       // bottom-left
+    vec2 tr = step(vec2(0.05),1.0-st);   // top-right
 
     st.y = 1.0 - pos.y;
-    float scale = float(u_scale);
-    st *= scale; // Scale the coordinate system by 10
+    float grid = float(u_grid);
+    st *= grid; // Scale the coordinate system by 10
 
+
+
+    st2.y = 1.0 - pos.y;
+    float grid2 = float(u_grid2);
+    st2 *= grid2; // Scale the coordinate system by 10
 
     vec2 ipos = floor(st);  // get the integer coords
+    vec2 ipos2 = floor(st2);  // get the integer coords
     // vec2 fpos = fract(st);  // get the fractional coords
 
-
-
-    // Import image and normalize colors
-    vec4 img = texture(background, ipos/scale);
+    // Import images and normalize colors
+    vec4 img = texture(u_bg, ipos/grid);
     vec3 norm_img = unmultiply(img);
 
 
-    vec3 color = vec3(0.0);
+    vec4 img2 = texture(u_img, ipos2/grid2);
+    vec3 norm_img2 = unmultiply(img2);
+    float mask1 = mask(st2,norm_img2,0.5);
 
-    if (!toggle) {
-        color = halftoning(st, scale, norm_img);
-    } if (toggle) {
-        color = pointcloud(st, scale, norm_img);
+    vec3 color = vec3(0.0);
+    if (u_toggle) {
+        color = halftoning(st, grid, norm_img);
+    } if (!u_toggle) {
+        color = pointcloud(st, norm_img, 4);
     }
+
+    vec3 color2 = vec3(0.0);
+    if (u_toggle2) {
+        color2 = pointcloud(st2, norm_img2, 2);
+    } if (!u_toggle2) {
+        color2 = halftoning(st2, grid2, norm_img2);
+    }
+
+    float mask2 = mask(st2,color2,0.5);
+
+    //vec3 border = vec3(bl.x * bl.y * tr.x * tr.y);
+    
+    color = mergeImg(st, color, color2, mask1*mask2);
+    //color = color2;
+    //color = mix(color,border,1.-border.r);
     fragColor = premultiply(color, img.a);
     // fragColor = img;
 }
