@@ -7,10 +7,10 @@ uniform vec2 u_resolution;
 uniform vec2 u_mouse;
 // uniform sampler2D cam;
 // uniform sampler2D video;
-uniform int u_grid;
-uniform int u_grid2;
-uniform bool u_toggle;
-uniform bool u_toggle2;
+uniform int u_grid_bg;
+uniform int u_grid_fg;
+uniform bool u_color_bg;
+uniform bool u_color_fg;
 
 #define PI 3.14159265359
 
@@ -253,7 +253,7 @@ vec3 halftoning(vec2 _st, float _grid, vec3 _img){
     return color;
 }
 
-vec3 mergeImg(vec2 _st, vec3 _bg, vec3 _img, float _mask){
+vec3 mergeImg(vec3 _bg, vec3 _img, float _mask){
     vec3 result = _bg;
     if (_mask == 1.0) {
         result = _img;
@@ -310,59 +310,64 @@ float mask(vec2 _st, vec3 _img, float _thresh){
 void main(){
 
     /* PARAMETERS */
-    // vec2 offset = vec2(.2,0.2);
     vec2 st = pos;
-    vec2 st2 = pos;
 
 
-    vec2 bl = step(vec2(0.05),st);       // bottom-left
-    vec2 tr = step(vec2(0.05),1.0-st);   // top-right
-
-    st.y = 1.0 - pos.y;
-    float grid = float(u_grid);
-    st *= grid; // Scale the coordinate system by 10
-
-
-
-    st2.y = 1.0 - pos.y;
-    float grid2 = float(u_grid2);
-    st2 *= grid2; // Scale the coordinate system by 10
-
-    vec2 ipos = floor(st);  // get the integer coords
-    vec2 ipos2 = floor(st2);  // get the integer coords
-    // vec2 fpos = fract(st);  // get the fractional coords
+    // Create background
+    vec2 st_bg = st;
+    st_bg.y = 1.0 - pos.y;
+    float grid = float(u_grid_bg);
+    st_bg *= grid; // Scale the coordinate system by 10
+    vec2 ipos = floor(st_bg);  // get the integer coords
 
     // Import images and normalize colors
     vec4 img = texture(u_bg, ipos/grid);
     vec3 norm_img = unmultiply(img);
 
 
+    vec3 color_bg = vec3(0.0);
+    if (u_color_bg) {
+        color_bg = halftoning(st_bg, grid, norm_img);
+    } if (!u_color_bg) {
+        color_bg = pointcloud(st_bg, norm_img, 4);
+    }
+
+
+
+    // Create foreground
+    vec2 st_fg = pos;
+    st_fg.y = 1.0 - pos.y;
+    float grid2 = float(u_grid_fg);
+    st_fg *= grid2; // Scale the coordinate system by 10
+    vec2 ipos2 = floor(st_fg);  // get the integer coords
+
     vec4 img2 = texture(u_img, ipos2/grid2);
     vec3 norm_img2 = unmultiply(img2);
-    float mask1 = mask(st2,norm_img2,0.5);
 
-    vec3 color = vec3(0.0);
-    if (u_toggle) {
-        color = halftoning(st, grid, norm_img);
-    } if (!u_toggle) {
-        color = pointcloud(st, norm_img, 4);
+    vec3 color_fg = vec3(0.0);
+    if (u_color_fg) {
+        color_fg = halftoning(st_fg, grid2, norm_img2);
+    } if (!u_color_fg) {
+        color_fg = pointcloud(st_fg, norm_img2, 2);
     }
 
-    vec3 color2 = vec3(0.0);
-    if (u_toggle2) {
-        color2 = pointcloud(st2, norm_img2, 2);
-    } if (!u_toggle2) {
-        color2 = halftoning(st2, grid2, norm_img2);
-    }
+    float mask1 = mask(st_fg,norm_img2,0.5);
+    float mask2 = 1.0;//mask(st_fg,color_fg,0.5);
 
-    float mask2 = mask(st2,color2,0.5);
 
+    // Create border
+
+    // vec2 bl = step(vec2(0.05),st);       // bottom-left
+    // vec2 tr = step(vec2(0.05),1.0-st);   // top-right
     //vec3 border = vec3(bl.x * bl.y * tr.x * tr.y);
     
-    color = mergeImg(st, color, color2, mask1*mask2);
+
+
+    // Compose image
+    color_bg = mergeImg(color_bg, color_fg, mask1*mask2);
     //color = color2;
     //color = mix(color,border,1.-border.r);
-    fragColor = premultiply(color, img.a);
+    fragColor = premultiply(color_bg, img.a);
     // fragColor = img;
 }
 
