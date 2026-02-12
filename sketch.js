@@ -33,8 +33,8 @@ const sliders = {};
 const colorPickers = {};
 
 const columns = {
-  background: { x: 800, y: 10, label: "Background" },
-  foreground: { x: 1000, y: 10, label: "Foreground" },
+  background: { x: 10, y: 10, label: "Background" },
+  foreground: { x: 200, y: 10, label: "Foreground" },
 };
 
 let exampleShader;
@@ -62,7 +62,7 @@ function preload() {
 
 
 function setup() {
-  createCanvas(800, 800, WEBGL);
+  createCanvas(min(windowWidth, windowHeight), min(windowWidth, windowHeight), WEBGL);
 
   // cam = createCapture(VIDEO);
   // cam.size(600, 600);

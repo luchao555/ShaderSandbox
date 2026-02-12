@@ -24,12 +24,12 @@ uniform vec3 u_color_accent_bg;
 uniform float u_bright_bg_final;
 //uniform float u_merge_bg;
 
-#define PI 3.14159265359
-
 uniform sampler2D u_bg;
 uniform sampler2D u_bg_2;
 uniform sampler2D u_img;
 
+
+#define PI 3.14159265359
 
 /* RGB TO CMYK */
 #ifndef FNC_MMIN
